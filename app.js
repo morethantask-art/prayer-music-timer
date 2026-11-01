@@ -5,7 +5,7 @@
  * Do Not Disturb, YouTube). Music files are copied into the browser (IndexedDB) so they
  * keep playing without the cloud drive; settings live in localStorage.
  */
-const VERSION = '1.2.1';
+const VERSION = '1.2.2';
 
 // ---------- storage ----------
 
@@ -28,7 +28,7 @@ function readJson(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
 function saveSettings() { try { localStorage.setItem('settings', JSON.stringify(s)); } catch {} }
-function saveTracks() { try { localStorage.setItem('tracks', JSON.stringify(tracks)); } catch {} }
+function saveTracks() { syncQueue(); try { localStorage.setItem('tracks', JSON.stringify(tracks)); } catch {} }
 
 /** Audio blobs, keyed by track id. */
 const blobs = (() => {
@@ -365,9 +365,30 @@ function advance() {
   if (player.index >= player.queue.length) {
     if (!s.loop) { localStorage.removeItem('resumePoint'); stop(true); return; }
     player.index = 0;
-    if (s.shuffle) player.queue = shuffled(player.queue);
+    player.queue = s.shuffle ? shuffled(tracks) : tracks.slice();
+    if (!player.queue.length) { stop(true); return; }
   }
   playCurrent();
+}
+
+/**
+ * The list changed while playing: the current song keeps going and the next ones follow the new list.
+ * Shuffle keeps its own order, only dropping removed songs and adding new ones at the end.
+ */
+function syncQueue() {
+  if (!player.running) return;
+  const cur = player.queue[player.index];
+  let q;
+  if (s.shuffle) {
+    q = player.queue.filter(t => t === cur || tracks.includes(t));
+    tracks.forEach(t => { if (!q.includes(t)) q.push(t); });
+  } else {
+    q = tracks.slice();
+    // A removed current song stays where it was, so the song after it still plays next.
+    if (cur && !q.includes(cur)) q.splice(Math.min(player.index, q.length), 0, cur);
+  }
+  player.queue = q;
+  player.index = Math.max(0, q.indexOf(cur));
 }
 player.el.addEventListener('ended', () => !player.usingRaw && advance());
 player.raw.addEventListener('ended', () => player.usingRaw && advance());
@@ -617,6 +638,8 @@ function dragWith(handle, li, from) {
       rows.forEach(r => { r.style.transform = ''; r.classList.remove('shift', 'dragging'); });
       if (target !== from) {
         tracks.splice(target, 0, tracks.splice(from, 1)[0]);
+        // A new order means "play it this way": the next ▶ starts from the top, not where it stopped.
+        if (!player.running) localStorage.removeItem('resumePoint');
         saveTracks();
         setTimeout(renderTracks, 0); // rebuild after this touch is fully handled
       }

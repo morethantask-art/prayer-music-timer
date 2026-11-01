@@ -1,6 +1,6 @@
 // Keeps the app's own files available offline. Music lives in IndexedDB, not here.
 // Bump CACHE when any file below changes so phones pick up the new version.
-const CACHE = 'prayer-music-v4';
+const CACHE = 'prayer-music-v5';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
