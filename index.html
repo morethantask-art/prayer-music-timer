@@ -69,7 +69,7 @@
           <label class="tile">
             <span class="badge big" style="--c:#007AFF"><svg viewBox="0 0 24 24"><path d="M10,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V8c0,-1.1 -0.9,-2 -2,-2h-8l-2,-2z"/></svg></span>
             <span>파일 · 드라이브</span>
-            <input id="fileInput" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.wma,.webm,.mp4" multiple hidden>
+            <input id="fileInput" type="file" accept="audio/*" multiple hidden>
           </label>
           <button class="tile" id="ytFindBtn">
             <span class="badge big" style="--c:#FF3B30"><svg viewBox="0 0 24 24"><path d="M21.58,7.19c-0.23,-0.86 -0.91,-1.54 -1.77,-1.77C18.25,5 12,5 12,5s-6.25,0 -7.81,0.42c-0.86,0.23 -1.54,0.91 -1.77,1.77C2,8.75 2,12 2,12s0,3.25 0.42,4.81c0.23,0.86 0.91,1.54 1.77,1.77C5.75,19 12,19 12,19s6.25,0 7.81,-0.42c0.86,-0.23 1.54,-0.91 1.77,-1.77C22,15.25 22,12 22,12s0,-3.25 -0.42,-4.81zM10,15V9l5.2,3 -5.2,3z"/></svg></span>
@@ -80,6 +80,7 @@
             <span>주소 추가</span>
           </button>
         </div>
+        <p class="hint">'파일 · 드라이브'를 누르고 목록이 뜨면 <b>내 파일</b> 또는 <b>드라이브</b>를 고르세요.</p>
         <ul id="trackList" class="track-list"></ul>
         <label class="switch-line"><span class="icon"><svg viewBox="0 0 24 24"><path d="M7,7h10v3l4,-4 -4,-4v3H5v6h2V7zM17,17H7v-3l-4,4 4,4v-3h12v-6h-2v4z"/></svg></span><span class="grow">목록 반복</span><input type="checkbox" class="switch" data-key="loop"></label>
         <label class="switch-line"><span class="icon"><svg viewBox="0 0 24 24"><path d="M10.59,9.17L5.41,4 4,5.41l5.17,5.17 1.42,-1.41zM14.5,4l2.04,2.04L4,18.59 5.41,20 17.96,7.46 20,9.5V4h-5.5zM14.83,13.41l-1.41,1.41 3.13,3.13L14.5,20H20v-5.5l-2.04,2.04 -3.13,-3.13z"/></svg></span><span class="grow">무작위 순서</span><input type="checkbox" class="switch" data-key="shuffle"></label>

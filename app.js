@@ -5,7 +5,7 @@
  * Do Not Disturb, YouTube). Music files are copied into the browser (IndexedDB) so they
  * keep playing without the cloud drive; settings live in localStorage.
  */
-const VERSION = '1.2';
+const VERSION = '1.2.1';
 
 // ---------- storage ----------
 
