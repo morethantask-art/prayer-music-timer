@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>기도음악 타이머</title>
+  <meta name="description" content="기도 시간에 맞춰 음악을 부드럽게 켜고 끄는 타이머">
+  <meta name="theme-color" content="#F2F2F7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="기도음악">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main id="app">
+    <h1 class="large-title">기도음악</h1>
+
+    <!-- 재생 카드 -->
+    <section class="card hero">
+      <div id="heroState" class="hero-state" hidden></div>
+      <div id="heroTitle" class="hero-title"></div>
+      <div id="heroTime" class="hero-time">30:00</div>
+      <div id="heroSub" class="hero-sub"></div>
+      <button id="playBtn" class="play-btn" aria-label="재생 / 정지">
+        <svg viewBox="0 0 24 24" id="playIcon"><path d="M8,5v14l11,-7z"/></svg>
+      </button>
+    </section>
+
+    <!-- 재생 -->
+    <div class="section-header">재생</div>
+    <section class="card">
+      <button class="row" data-panel="offPanel">
+        <span class="badge" style="--c:#FF9500"><svg viewBox="0 0 24 24"><path d="M6,2v6h0.01L6,8.01 10,12l-4,4 0.01,0.01H6V22h12v-5.99h-0.01L18,16l-4,-4 4,-3.99 -0.01,-0.01H18V2H6zM16,16.5V20H8v-3.5l4,-4 4,4zM12,11.5l-4,-4V4h8v3.5l-4,4z"/></svg></span>
+        <span class="row-title">꺼짐 예약</span>
+        <span class="row-value" id="offValue"></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>
+      </button>
+      <div class="panel" id="offPanel" hidden>
+        <div class="segmented">
+          <button id="modeTimer">분 후 꺼짐</button>
+          <button id="modeClock">시각에 꺼짐</button>
+        </div>
+        <div id="minutesBox" class="stepper" data-key="timerMin" data-min="0" data-max="600" data-step="5" data-unit="분 후"></div>
+        <div id="clockBox" class="clock-box">
+          <button id="stopTimeBtn" class="time-btn"></button>
+          <span>에 꺼짐</span>
+        </div>
+        <p class="hint center">0분은 직접 끌 때까지 재생해요</p>
+      </div>
+    </section>
+    <p class="footnote">재생 중에는 화면이 꺼지지 않게 유지돼요. 화면을 켜 둔 채로 기도해 주세요.</p>
+
+    <!-- 음악 -->
+    <div class="section-header">음악</div>
+    <section class="card">
+      <button class="row" data-panel="musicPanel">
+        <span class="badge" style="--c:#FF2D55"><svg viewBox="0 0 24 24"><path d="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z"/></svg></span>
+        <span class="row-title">재생 목록</span>
+        <span class="row-value" id="musicValue"></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>
+      </button>
+      <div class="panel" id="musicPanel" hidden>
+        <div class="tiles">
+          <label class="tile">
+            <span class="badge big" style="--c:#007AFF"><svg viewBox="0 0 24 24"><path d="M10,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V8c0,-1.1 -0.9,-2 -2,-2h-8l-2,-2z"/></svg></span>
+            <span>파일 · 드라이브</span>
+            <input id="fileInput" type="file" accept="audio/*" multiple hidden>
+          </label>
+          <button class="tile" id="addLinkBtn">
+            <span class="badge big" style="--c:#8E8E93"><svg viewBox="0 0 24 24"><path d="M3.9,12c0,-1.71 1.39,-3.1 3.1,-3.1h4V7H7c-2.76,0 -5,2.24 -5,5s2.24,5 5,5h4v-1.9H7c-1.71,0 -3.1,-1.39 -3.1,-3.1zM8,13h8v-2H8v2zM17,7h-4v1.9h4c1.71,0 3.1,1.39 3.1,3.1s-1.39,3.1 -3.1,3.1h-4V17h4c2.76,0 5,-2.24 5,-5s-2.24,-5 -5,-5z"/></svg></span>
+            <span>인터넷 주소</span>
+          </button>
+        </div>
+        <ul id="trackList" class="track-list"></ul>
+        <label class="switch-line"><span class="icon"><svg viewBox="0 0 24 24"><path d="M7,7h10v3l4,-4 -4,-4v3H5v6h2V7zM17,17H7v-3l-4,4 4,4v-3h12v-6h-2v4z"/></svg></span><span class="grow">목록 반복</span><input type="checkbox" class="switch" data-key="loop"></label>
+        <label class="switch-line"><span class="icon"><svg viewBox="0 0 24 24"><path d="M10.59,9.17L5.41,4 4,5.41l5.17,5.17 1.42,-1.41zM14.5,4l2.04,2.04L4,18.59 5.41,20 17.96,7.46 20,9.5V4h-5.5zM14.83,13.41l-1.41,1.41 3.13,3.13L14.5,20H20v-5.5l-2.04,2.04 -3.13,-3.13z"/></svg></span><span class="grow">무작위 순서</span><input type="checkbox" class="switch" data-key="shuffle"></label>
+        <label class="switch-line"><span class="icon"><svg viewBox="0 0 24 24"><path d="M13,3c-4.97,0 -9,4.03 -9,9H1l3.89,3.89 0.07,0.14L9,12H6c0,-3.87 3.13,-7 7,-7s7,3.13 7,7 -3.13,7 -7,7c-1.93,0 -3.68,-0.79 -4.94,-2.06l-1.42,1.42C8.27,19.99 10.51,21 13,21c4.97,0 9,-4.03 9,-9s-4.03,-9 -9,-9zM12,8v5l4.28,2.54 0.72,-1.21 -3.5,-2.08V8H12z"/></svg></span><span class="grow">이어서 재생 (멈춘 곳부터)</span><input type="checkbox" class="switch" data-key="resume"></label>
+        <p class="hint">구글 드라이브 · 원드라이브 음악은 '파일 · 드라이브'에서 고르면 이 앱 안에 저장돼요</p>
+      </div>
+    </section>
+
+    <!-- 소리 -->
+    <div class="section-header">소리</div>
+    <section class="card">
+      <button class="row" data-panel="fadeInPanel">
+        <span class="badge" style="--c:#34C759"><svg viewBox="0 0 24 24"><path d="M16,6l2.29,2.29 -4.88,4.88 -4,-4L2,16.59 3.41,18l6,-6 4,4 6.3,-6.29L22,12V6z"/></svg></span>
+        <span class="row-title">부드럽게 시작</span>
+        <span class="row-value" id="fadeInValue"></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>
+      </button>
+      <div class="panel" id="fadeInPanel" hidden>
+        <label class="switch-line"><span class="grow">점점 커지며 시작해요</span><input type="checkbox" class="switch" data-key="fadeInOn"></label>
+        <div class="stepper" data-key="fadeInSec" data-min="0" data-max="600" data-step="1" data-unit="초 동안"></div>
+      </div>
+      <div class="sep"></div>
+      <button class="row" data-panel="fadeOutPanel">
+        <span class="badge" style="--c:#30B0C7"><svg viewBox="0 0 24 24"><path d="M16,18l2.29,-2.29 -4.88,-4.88 -4,4L2,7.41 3.41,6l6,6 4,-4 6.3,6.29L22,12v6z"/></svg></span>
+        <span class="row-title">부드럽게 끝내기</span>
+        <span class="row-value" id="fadeOutValue"></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>
+      </button>
+      <div class="panel" id="fadeOutPanel" hidden>
+        <label class="switch-line"><span class="grow">점점 작아지며 끝나요</span><input type="checkbox" class="switch" data-key="fadeOutOn"></label>
+        <div class="stepper" data-key="fadeOutSec" data-min="0" data-max="600" data-step="1" data-unit="초 동안"></div>
+      </div>
+      <div class="sep"></div>
+      <button class="row" data-panel="volumePanel">
+        <span class="badge" style="--c:#007AFF"><svg viewBox="0 0 24 24"><path d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg></span>
+        <span class="row-title">앱 볼륨</span>
+        <span class="row-value" id="volumeValue"></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>
+      </button>
+      <div class="panel" id="volumePanel" hidden>
+        <div class="volume-line">
+          <svg viewBox="0 0 24 24"><path d="M7,9v6h4l5,5V4l-5,5H7z"/></svg>
+          <input id="volume" type="range" min="0" max="100" step="1">
+          <svg viewBox="0 0 24 24"><path d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg>
+        </div>
+        <p class="hint">전체 소리 크기는 휴대폰 옆의 음량 버튼으로 조절해 주세요</p>
+      </div>
+    </section>
+
+    <!-- 기타 -->
+    <div class="section-header">기타</div>
+    <section class="card">
+      <button class="row" id="installRow">
+        <span class="badge" style="--c:#34C759"><svg viewBox="0 0 24 24"><path d="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></span>
+        <span class="row-title">홈 화면에 추가</span>
+        <span class="row-value">앱처럼 쓰기</span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>
+      </button>
+      <div class="sep"></div>
+      <div class="row static">
+        <span class="badge" style="--c:#7B61FF"><svg viewBox="0 0 24 24"><path d="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2V7h2v2z"/></svg></span>
+        <span class="row-title">버전 정보</span>
+        <span class="row-value" id="versionValue"></span>
+      </div>
+      <div class="sep"></div>
+      <a class="row" href="mailto:morethantask@gmail.com">
+        <span class="badge" style="--c:#8E8E93"><svg viewBox="0 0 24 24"><path d="M20,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6c0,-1.1 -0.9,-2 -2,-2zM20,8l-8,5 -8,-5V6l8,5 8,-5v2z"/></svg></span>
+        <span class="row-texts"><span class="row-title">사용 문의</span><span class="row-sub">morethantask@gmail.com</span></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z"/></svg>
+      </a>
+    </section>
+    <div class="bottom-space"></div>
+  </main>
+
+  <!-- 시간 선택 -->
+  <div id="timeSheet" class="sheet" hidden>
+    <div class="sheet-card">
+      <h2>꺼질 시각</h2>
+      <div class="wheel-row">
+        <div id="ampm" class="ampm" role="button" tabindex="0">
+          <span class="ampm-ghost" id="ampmAbove"></span>
+          <span class="ampm-pill" id="ampmPill"></span>
+          <span class="ampm-ghost" id="ampmBelow"></span>
+        </div>
+        <div class="wheel" id="hourWheel"></div>
+        <div class="colon">:</div>
+        <div class="wheel" id="minuteWheel"></div>
+      </div>
+      <p class="hint center">오전·오후는 누르거나 위아래로 밀어서 바꿔요</p>
+      <div class="sheet-buttons">
+        <button id="timeCancel">취소</button>
+        <button id="timeOk" class="primary">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 인터넷 주소 추가 -->
+  <div id="linkSheet" class="sheet" hidden>
+    <div class="sheet-card">
+      <h2>인터넷 주소 추가</h2>
+      <input id="linkUrl" type="url" placeholder="https://…/song.mp3" autocomplete="off">
+      <input id="linkName" type="text" placeholder="이름 (비워두면 자동)" autocomplete="off">
+      <p class="hint">mp3 같은 음악 파일 주소를 넣어 주세요. 유튜브 주소는 웹 앱에서 재생할 수 없어요.</p>
+      <div class="sheet-buttons">
+        <button id="linkCancel">취소</button>
+        <button id="linkOk" class="primary">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 홈 화면 추가 안내 -->
+  <div id="installSheet" class="sheet" hidden>
+    <div class="sheet-card">
+      <h2>홈 화면에 추가</h2>
+      <div id="installSteps"></div>
+      <div class="sheet-buttons">
+        <button id="installClose" class="primary">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
