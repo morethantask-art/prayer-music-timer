@@ -5,7 +5,7 @@
  * Do Not Disturb, YouTube). Music files are copied into the browser (IndexedDB) so they
  * keep playing without the cloud drive; settings live in localStorage.
  */
-const VERSION = '1.0';
+const VERSION = '1.1';
 
 // ---------- storage ----------
 
@@ -191,10 +191,109 @@ function shuffled(list) {
   return a;
 }
 
+// ---------- YouTube ----------
+/*
+ * YouTube plays in its own player inside the playback card (it must stay visible).
+ * Fades use the player's volume; iPhone ignores that, so there it simply stops on time.
+ */
+const yt = { api: null, player: null, ready: false, startTimer: 0 };
+
+function ytRef(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^(www|m|music)\./, '');
+    const list = u.searchParams.get('list');
+    let v = null;
+    if (host === 'youtu.be') v = u.pathname.slice(1).split('/')[0];
+    else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+      const seg = u.pathname.split('/').filter(Boolean);
+      v = seg[0] === 'watch' ? u.searchParams.get('v') : ['shorts', 'live', 'embed'].includes(seg[0]) ? seg[1] : null;
+    } else return null;
+    const ok = x => x && /^[\w-]{6,}$/.test(x);
+    if (!ok(v) && !ok(list)) return null;
+    return { v: ok(v) ? v : null, list: ok(list) ? list : null };
+  } catch { return null; }
+}
+
+function loadYtApi() {
+  return yt.api ??= new Promise(resolve => {
+    window.onYouTubeIframeAPIReady = resolve;
+    const sc = document.createElement('script');
+    sc.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(sc);
+  });
+}
+
+const currentIsYouTube = () => player.running && player.queue[player.index]?.kind === 'youtube';
+
+async function playYouTube(t) {
+  const ref = ytRef(t.url);
+  if (!ref) return trackFailed();
+  $('ytBox').hidden = false;
+  const startSeconds = Math.floor(player.pendingSeek / 1000);
+  player.pendingSeek = 0;
+  try { await loadYtApi(); } catch { return trackFailed(); }
+  if (!player.running) return;
+  const volume = Math.round(envelopeAt(Date.now()) * s.volume);
+  if (!yt.player) {
+    yt.player = new YT.Player('ytPlayer', {
+      width: '100%', height: '100%', videoId: ref.v || undefined,
+      playerVars: Object.assign({ playsinline: 1, rel: 0, autoplay: 1, start: startSeconds },
+        ref.list ? { listType: 'playlist', list: ref.list } : {}),
+      events: {
+        onReady: e => { yt.ready = true; e.target.setVolume(volume); e.target.playVideo(); },
+        onStateChange: onYtState,
+        onError: e => {
+          if (!currentIsYouTube()) return;
+          // 101/150: the uploader allows playback only on YouTube itself.
+          if (e.data === 101 || e.data === 150) toast('이 영상은 유튜브 밖에서 재생이 막혀 있어요. 다른 영상을 골라 주세요');
+          trackFailed();
+        },
+      },
+    });
+  } else if (ref.list) {
+    yt.player.setVolume(volume);
+    yt.player.loadPlaylist({ list: ref.list, listType: 'playlist', index: 0, startSeconds });
+  } else {
+    yt.player.setVolume(volume);
+    yt.player.loadVideoById({ videoId: ref.v, startSeconds });
+  }
+  // iPhone may not let YouTube start by itself; ask for one tap on the video.
+  clearTimeout(yt.startTimer);
+  yt.startTimer = setTimeout(() => {
+    if (currentIsYouTube() && yt.player?.getPlayerState?.() !== YT.PlayerState.PLAYING) {
+      toast('유튜브 화면의 ▶를 한 번 눌러 주세요');
+    }
+  }, 3500);
+}
+
+function onYtState(e) {
+  if (!currentIsYouTube()) return;
+  if (e.data === YT.PlayerState.PLAYING) player.failures = 0;
+  if (e.data === YT.PlayerState.ENDED) {
+    const pl = yt.player.getPlaylist?.();
+    if (pl && pl.length && yt.player.getPlaylistIndex() < pl.length - 1) return; // playlist continues
+    advance();
+  }
+}
+
+function stopYouTube() {
+  clearTimeout(yt.startTimer);
+  try { yt.player?.stopVideo?.(); } catch {}
+  $('ytBox').hidden = true;
+}
+
 async function playCurrent() {
   if (!player.running) return;
   const t = player.queue[player.index];
   releaseSource();
+  if (t.kind === 'youtube') {
+    await playYouTube(t);
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: displayTitle(t), artist: '기도음악 타이머' });
+    render();
+    return;
+  }
+  stopYouTube();
   let src;
   if (t.kind === 'file') {
     const blob = await blobs.get(t.id).catch(() => null);
@@ -244,7 +343,12 @@ function releaseSource() {
 
 function trackFailed() {
   player.failures++;
-  if (player.failures >= player.queue.length) { stop(); toast('재생할 수 있는 음악이 없어요'); return; }
+  if (player.failures >= player.queue.length) {
+    const blocked = document.getElementById('toast').textContent.includes('막혀');
+    stop();
+    if (!blocked) toast('재생할 수 있는 음악이 없어요');
+    return;
+  }
   advance();
 }
 
@@ -264,8 +368,10 @@ player.raw.addEventListener('ended', () => player.usingRaw && advance());
 function saveResumePoint() {
   const t = player.queue[player.index];
   if (!t) return;
-  const el = player.usingRaw ? player.raw : player.el;
-  try { localStorage.setItem('resumePoint', JSON.stringify({ id: t.id, pos: Math.round(el.currentTime * 1000) })); } catch {}
+  let sec;
+  if (t.kind === 'youtube') sec = yt.ready ? (yt.player.getCurrentTime?.() || 0) : 0;
+  else sec = (player.usingRaw ? player.raw : player.el).currentTime;
+  try { localStorage.setItem('resumePoint', JSON.stringify({ id: t.id, pos: Math.round(sec * 1000) })); } catch {}
 }
 
 /** Stopping by hand is immediate; only the automatic end fades out. */
@@ -274,6 +380,7 @@ function stop(completed = false) {
   player.running = false;
   clearInterval(player.tick);
   releaseSource();
+  stopYouTube();
   if (player.fade) { player.fade.gain.cancelScheduledValues(player.ctx.currentTime); player.fade.gain.value = 1; }
   releaseScreen();
   if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
@@ -285,7 +392,8 @@ function onTick() {
   if (!player.running) return;
   const now = Date.now();
   if (player.endAt && now >= player.endAt) { stop(); return; }
-  if (player.usingRaw) player.raw.volume = Math.min(1, envelopeAt(now) * s.volume / 100);
+  if (currentIsYouTube()) { if (yt.ready) yt.player.setVolume(Math.round(envelopeAt(now) * s.volume)); }
+  else if (player.usingRaw) player.raw.volume = Math.min(1, envelopeAt(now) * s.volume / 100);
   if (now - lastSave > 5000) { lastSave = now; saveResumePoint(); }
   renderHero();
 }
@@ -394,7 +502,10 @@ document.querySelectorAll('.switch[data-key]').forEach(sw => sw.addEventListener
   s[sw.dataset.key] = sw.checked; saveSettings(); render();
 }));
 
-$('volume').addEventListener('input', e => { s.volume = +e.target.value; setMasterVolume(); saveSettings(); render(); });
+$('volume').addEventListener('input', e => {
+  s.volume = +e.target.value; setMasterVolume(); saveSettings(); render();
+  if (currentIsYouTube() && yt.ready) yt.player.setVolume(Math.round(envelopeAt(Date.now()) * s.volume));
+});
 
 /** [−] value [+] unit; tap = one step, hold = keep stepping. */
 document.querySelectorAll('.stepper').forEach(st => {
@@ -422,6 +533,7 @@ document.querySelectorAll('.stepper').forEach(st => {
 
 const ICON = {
   file: ['#FF2D55', 'M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z'],
+  youtube: ['#FF3B30', 'M21.58,7.19c-0.23,-0.86 -0.91,-1.54 -1.77,-1.77C18.25,5 12,5 12,5s-6.25,0 -7.81,0.42c-0.86,0.23 -1.54,0.91 -1.77,1.77C2,8.75 2,12 2,12s0,3.25 0.42,4.81c0.23,0.86 0.91,1.54 1.77,1.77C5.75,19 12,19 12,19s6.25,0 7.81,-0.42c0.86,-0.23 1.54,-0.91 1.77,-1.77C22,15.25 22,12 22,12s0,-3.25 -0.42,-4.81zM10,15V9l5.2,3 -5.2,3z'],
   url: ['#8E8E93', 'M3.9,12c0,-1.71 1.39,-3.1 3.1,-3.1h4V7H7c-2.76,0 -5,2.24 -5,5s2.24,5 5,5h4v-1.9H7c-1.71,0 -3.1,-1.39 -3.1,-3.1zM8,13h8v-2H8v2zM17,7h-4v1.9h4c1.71,0 3.1,1.39 3.1,3.1s-1.39,3.1 -3.1,3.1h-4V17h4c2.76,0 5,-2.24 5,-5s-2.24,-5 -5,-5z'],
 };
 const DELETE = 'M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z';
@@ -440,6 +552,7 @@ function renderTracks() {
       <button class="icon-btn delete" aria-label="삭제"><svg viewBox="0 0 24 24"><path d="${DELETE}"/></svg></button>
       <span class="icon-btn handle" aria-label="끌어서 순서 바꾸기"><svg viewBox="0 0 24 24"><path d="${HANDLE}"/></svg></span>`;
     li.querySelector('.name').textContent = displayTitle(t);
+    li.querySelector('.name').addEventListener('click', () => openRename(i));
     li.querySelector('.delete').addEventListener('click', () => removeTrack(i));
     dragWith(li.querySelector('.handle'), li, i);
     list.appendChild(li);
@@ -510,19 +623,99 @@ $('fileInput').addEventListener('change', async e => {
   toast(ok === files.length ? `${ok}곡을 추가했어요` : `${ok}곡만 추가했어요. 저장 공간을 확인해 주세요`);
 });
 
-$('addLinkBtn').addEventListener('click', () => { $('linkUrl').value = ''; $('linkName').value = ''; $('linkSheet').hidden = false; });
+function openLinkSheet(url = '', name = '') {
+  $('linkUrl').value = url;
+  $('linkName').value = name;
+  $('linkSheet').hidden = false;
+}
+$('addLinkBtn').addEventListener('click', () => openLinkSheet());
 $('linkCancel').addEventListener('click', () => ($('linkSheet').hidden = true));
-$('linkOk').addEventListener('click', () => {
-  const m = $('linkUrl').value.match(/https?:\/\/\S+/);
-  if (!m) { toast('http:// 또는 https:// 로 시작하는 주소를 넣어 주세요'); return; }
-  const url = m[0];
-  if (/youtu\.?be/i.test(url)) { toast('유튜브 주소는 웹 앱에서 재생할 수 없어요'); return; }
-  if (tracks.some(t => t.url === url)) { toast('이미 목록에 있어요'); return; }
-  const name = $('linkName').value.trim() || decodeURIComponent(url.split(/[?#]/)[0].split('/').pop() || url);
-  tracks.push({ id: newId(), name, kind: 'url', url });
+
+$('pasteBtn').addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    const m = text.match(/https?:\/\/\S+/);
+    if (m) $('linkUrl').value = m[0]; else toast('복사된 링크가 없어요');
+  } catch {
+    toast('주소 칸을 길게 눌러 붙여넣기 해 주세요');
+    $('linkUrl').focus();
+  }
+});
+
+/** Plain link without tracking or mobile-site parts, so the same song isn't added twice. */
+function canonicalYouTube(ref) {
+  if (ref.v && ref.list) return `https://www.youtube.com/watch?v=${ref.v}&list=${ref.list}`;
+  if (ref.v) return `https://www.youtube.com/watch?v=${ref.v}`;
+  return `https://www.youtube.com/playlist?list=${ref.list}`;
+}
+
+async function youTubeTitle(url) {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`);
+    if (r.ok) return (await r.json()).title || null;
+  } catch {}
+  return null;
+}
+
+function addLink(raw, givenName) {
+  const m = raw.match(/https?:\/\/\S+/);
+  if (!m) { toast('http:// 또는 https:// 로 시작하는 주소를 넣어 주세요'); return false; }
+  const ref = ytRef(m[0]);
+  if (/spotify\.com/i.test(m[0])) { toast('스포티파이는 웹 앱에서 재생할 수 없어요'); return false; }
+  const url = ref ? canonicalYouTube(ref) : m[0];
+  if (tracks.some(t => t.url === url)) { toast('이미 목록에 있어요'); return false; }
+  const kind = ref ? 'youtube' : 'url';
+  const fallback = ref ? (ref.v ? '유튜브 영상' : '유튜브 재생목록') : decodeURIComponent(url.split(/[?#]/)[0].split('/').pop() || url);
+  const t = { id: newId(), name: givenName || fallback, kind, url };
+  tracks.push(t);
   saveTracks(); renderTracks();
-  $('linkSheet').hidden = true;
-  toast('링크를 추가했어요');
+  toast(ref ? '유튜브 곡을 추가했어요' : '주소를 추가했어요');
+  if (ref && !givenName) {
+    // Fill in the real title when YouTube tells us (the user can still rename it).
+    youTubeTitle(url).then(title => { if (title && t.name === fallback) { t.name = title; saveTracks(); renderTracks(); } });
+  }
+  return true;
+}
+
+$('linkOk').addEventListener('click', () => {
+  if (addLink($('linkUrl').value.trim(), $('linkName').value.trim())) $('linkSheet').hidden = true;
+});
+
+// YouTube search: opens YouTube (app or site); coming back opens the add sheet ready to paste.
+let awaitingYouTube = false;
+$('ytFindBtn').addEventListener('click', () => {
+  $('shareTip').hidden = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  $('ytSheet').hidden = false;
+});
+$('ytCancel').addEventListener('click', () => ($('ytSheet').hidden = true));
+$('ytGo').addEventListener('click', () => {
+  const q = $('ytQuery').value.trim() || '찬양 기도음악';
+  awaitingYouTube = true;
+  $('ytSheet').hidden = true;
+  window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank');
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && awaitingYouTube) {
+    awaitingYouTube = false;
+    openLinkSheet();
+    toast('복사한 링크를 붙여넣기 해 주세요');
+  }
+});
+
+// ---------- rename ----------
+
+let renameIndex = -1;
+function openRename(i) {
+  renameIndex = i;
+  $('renameInput').value = tracks[i].name;
+  $('renameSheet').hidden = false;
+  setTimeout(() => $('renameInput').select(), 50);
+}
+$('renameCancel').addEventListener('click', () => ($('renameSheet').hidden = true));
+$('renameOk').addEventListener('click', () => {
+  const name = $('renameInput').value.trim();
+  if (name && tracks[renameIndex]) { tracks[renameIndex].name = name; saveTracks(); renderTracks(); }
+  $('renameSheet').hidden = true;
 });
 
 // ---------- time wheel ----------
@@ -606,6 +799,7 @@ if (location.hash.startsWith('#demo')) {
     { id: 'b', name: '평안의 기도 (피아노).mp3', kind: 'file' },
     { id: 'c', name: '묵상을 위한 첼로.mp3', kind: 'file' },
     { id: 'd', name: '새벽 예배 찬양 모음.mp3', kind: 'url', url: 'https://example.com/a.mp3' },
+    { id: 'e', name: '은혜 (피아노 연주)', kind: 'youtube', url: 'https://www.youtube.com/watch?v=abcdefghijk' },
   ];
   const open = new URLSearchParams(location.hash.slice(6)).get('open');
   renderTracks();
@@ -614,4 +808,14 @@ if (location.hash.startsWith('#demo')) {
 } else {
   renderTracks();
 }
+
+// Shared from another app (Android home-screen install: YouTube → 공유 → 기도음악).
+(() => {
+  const q = new URLSearchParams(location.search);
+  const shared = q.get('url') || q.get('text');
+  if (!shared) return;
+  history.replaceState(null, '', location.pathname);
+  const m = shared.match(/https?:\/\/\S+/);
+  if (m) { openPanel('musicPanel', true); openLinkSheet(m[0], ''); }
+})();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');

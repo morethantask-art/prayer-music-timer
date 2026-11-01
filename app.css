@@ -187,3 +187,15 @@ svg { fill: currentColor; }
   background: rgba(28, 28, 30, .92); color: #fff; padding: 10px 16px; border-radius: 20px; font-size: 15px;
   max-width: 90%; text-align: center; z-index: 20;
 }
+
+/* YouTube player inside the playback card (YouTube only plays while it is visible) */
+.yt-box { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; margin-bottom: 14px; }
+.yt-box iframe, .yt-box #ytPlayer { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.url-line { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
+.url-line input { margin-bottom: 0 !important; flex: 1; min-width: 0; }
+.paste-btn { flex: none; background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 0 14px; font-size: 15px; font-weight: 600; }
+.sheet-card input[type=search] { width: 100%; font-size: 17px; padding: 12px; border: 0; border-radius: 10px; background: var(--bg); margin-bottom: 8px; }
+.steps { margin: 6px 0 0; padding-left: 22px; line-height: 1.8; font-size: 15px; }
+.steps b, .hint b { color: var(--accent); }
+.track .name { cursor: pointer; }
+.tiles .tile span:last-child { white-space: nowrap; }
