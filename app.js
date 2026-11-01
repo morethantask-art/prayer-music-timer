@@ -5,7 +5,7 @@
  * Do Not Disturb, YouTube). Music files are copied into the browser (IndexedDB) so they
  * keep playing without the cloud drive; settings live in localStorage.
  */
-const VERSION = '1.2.2';
+const VERSION = '1.2.3';
 
 // ---------- storage ----------
 
@@ -72,11 +72,15 @@ function msUntil(h, m) {
 function displayTitle(t) { return t.name.replace(/\.(mp3|m4a|aac|wav|ogg|flac|opus|webm)$/i, ''); }
 function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 let toastTimer;
-function toast(msg) {
+/** A sticky toast stays until it is tapped (for messages people must be able to read). */
+function toast(msg, sticky = false) {
   const el = $('toast');
   el.textContent = msg; el.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => (el.hidden = true), 2600);
+  el.classList.toggle('sticky', sticky);
+  clearTimeout(toastTimer);
+  if (!sticky) toastTimer = setTimeout(() => (el.hidden = true), 2600);
 }
+$('toast').addEventListener('click', () => { clearTimeout(toastTimer); $('toast').hidden = true; });
 
 // ---------- player ----------
 /*
@@ -253,7 +257,11 @@ async function playYouTube(t) {
         onError: e => {
           if (!currentIsYouTube()) return;
           // 101/150: the uploader allows playback only on YouTube itself.
-          if (e.data === 101 || e.data === 150) toast('이 영상은 유튜브 밖에서 재생이 막혀 있어요. 다른 영상을 골라 주세요');
+          if (e.data === 101 || e.data === 150) {
+            const t = player.queue[player.index];
+            t.blocked = true; saveTracks(); renderTracks();
+            toast(`'${displayTitle(t)}' 영상은 유튜브 밖에서 재생이 막혀 있어요. 목록에 ⚠ 표시를 해 두었어요. 다른 영상을 골라 주세요 (눌러서 닫기)`, true);
+          }
           trackFailed();
         },
       },
@@ -276,7 +284,11 @@ async function playYouTube(t) {
 
 function onYtState(e) {
   if (!currentIsYouTube()) return;
-  if (e.data === YT.PlayerState.PLAYING) player.failures = 0;
+  if (e.data === YT.PlayerState.PLAYING) {
+    player.failures = 0;
+    const t = player.queue[player.index];
+    if (t.blocked) { delete t.blocked; saveTracks(); renderTracks(); } // it plays after all
+  }
   if (e.data === YT.PlayerState.ENDED) {
     const pl = yt.player.getPlaylist?.();
     if (pl && pl.length && yt.player.getPlaylistIndex() < pl.length - 1) return; // playlist continues
@@ -592,6 +604,7 @@ function renderTracks() {
       <button class="icon-btn delete" aria-label="삭제"><svg viewBox="0 0 24 24"><path d="${DELETE}"/></svg></button>
       <span class="icon-btn handle" aria-label="끌어서 순서 바꾸기"><svg viewBox="0 0 24 24"><path d="${HANDLE}"/></svg></span>`;
     li.querySelector('.name').textContent = displayTitle(t);
+    if (t.blocked) li.querySelector('.name').insertAdjacentHTML('afterbegin', '<span class="blocked-tag">⚠ 재생 불가</span>');
     li.querySelector('.name').addEventListener('click', () => openRename(i));
     li.querySelector('.delete').addEventListener('click', () => removeTrack(i));
     dragWith(li.querySelector('.handle'), li, i);

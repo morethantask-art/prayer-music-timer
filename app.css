@@ -205,3 +205,6 @@ svg { fill: currentColor; }
   background: var(--accent); color: #fff; font-size: 17px; font-weight: 600;
 }
 .panel-ok:active { opacity: .85; }
+/* YouTube refused to play this one outside YouTube */
+.blocked-tag { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; background: #FFE5E3; color: var(--red); font-size: 12px; font-weight: 700; vertical-align: 1px; }
+.toast.sticky { cursor: pointer; line-height: 1.45; border-radius: 14px; width: max-content; max-width: min(90vw, 520px); }
