@@ -199,3 +199,9 @@ svg { fill: currentColor; }
 .steps b, .hint b { color: var(--accent); }
 .track .name { cursor: pointer; }
 .tiles .tile span:last-child { white-space: nowrap; }
+/* "확인" that folds an opened section */
+.panel-ok {
+  display: block; width: 100%; margin-top: 16px; padding: 12px 0; border-radius: 12px;
+  background: var(--accent); color: #fff; font-size: 17px; font-weight: 600;
+}
+.panel-ok:active { opacity: .85; }

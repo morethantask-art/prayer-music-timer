@@ -5,16 +5,23 @@
  * Do Not Disturb, YouTube). Music files are copied into the browser (IndexedDB) so they
  * keep playing without the cloud drive; settings live in localStorage.
  */
-const VERSION = '1.1';
+const VERSION = '1.2';
 
 // ---------- storage ----------
 
 const DEFAULTS = {
   fadeInOn: true, fadeInSec: 10, fadeOutOn: true, fadeOutSec: 30,
   volume: 100, loop: true, shuffle: false, resume: false,
-  timerMin: 30, stopAtClock: false, stopHour: 6, stopMinute: 0,
+  timerMin: 10, stopAtClock: false, stopHour: 6, stopMinute: 0,
 };
 const s = Object.assign({}, DEFAULTS, readJson('settings', {}));
+// 1.2 changed the default from 30 to 10 minutes. Move people still on the old default once;
+// anyone who chose another time (or "시각에 꺼짐") keeps it.
+if (!s.default10) {
+  if (s.timerMin === 30 && !s.stopAtClock) s.timerMin = 10;
+  s.default10 = true;
+  try { localStorage.setItem('settings', JSON.stringify(s)); } catch {}
+}
 let tracks = readJson('tracks', []);           // [{id, name, kind: 'file'|'url', url?}]
 
 function readJson(key, fallback) {
@@ -492,6 +499,18 @@ function openPanel(id, force) {
 document.querySelectorAll('.row[data-panel]').forEach(row =>
   row.addEventListener('click', () => openPanel(row.dataset.panel)));
 
+/** Folds every open section (values are already saved as they change). */
+function closePanels() { openPanel(null); }
+
+// "확인" at the bottom of each section: done adjusting, fold it up.
+document.querySelectorAll('.panel').forEach(panel => {
+  const ok = document.createElement('button');
+  ok.className = 'panel-ok';
+  ok.textContent = '확인';
+  ok.addEventListener('click', closePanels);
+  panel.appendChild(ok);
+});
+
 // ---------- controls ----------
 
 $('playBtn').addEventListener('click', () => (player.running ? stop() : start()));
@@ -773,6 +792,7 @@ $('timeOk').addEventListener('click', () => {
   s.stopMinute = minuteWheel.get();
   saveSettings(); render();
   $('timeSheet').hidden = true;
+  closePanels(); // one 확인 closes both the picker and the 꺼짐 예약 section
 });
 
 // ---------- install guide ----------
